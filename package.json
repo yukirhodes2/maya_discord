@@ -1,0 +1,14 @@
+{
+  "name": "maya-discord",
+  "version": "0.0.1",
+  "description": "Discord bot for the apprentices' classes of the UTC",
+  "main": "bot.js",
+  "author": "William Sha",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "discord.io": "^2.5.3",
+    "winston": "^2.4.2"
+  }
+}
