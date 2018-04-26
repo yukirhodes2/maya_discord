@@ -1,6 +1,8 @@
 var Discord = require('discord.io');
 var logger = require('winston');
 var auth = require('./auth.json');
+var natural = require('natural');
+var classifier = new natural.BayesClassifier();
 
 // Configure logger settings
 logger.remove(logger.transports.Console);
@@ -13,6 +15,8 @@ var bot = new Discord.Client({
    token: auth.token,
    autorun: true
 });
+
+
 
 bot.on('ready', function (evt) {
     logger.info('Connected');
@@ -36,7 +40,19 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     message: 'Champion !'
                 });
             break;
-            // Just add any case commands if you want to..
+
+            case 'labourree':
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'Oui Monsieur !'
+                });
+            break;
+
+            default:
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'J\'ai l\'impression que tu essayes de me dire quelque chose, mais je ne comprends pas. :)'
+                });
          }
      }
 });
