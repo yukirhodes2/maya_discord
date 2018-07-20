@@ -1,0 +1,4 @@
+﻿Au revoir <%username%>
+A+ :kissing_heart:
+Ciao :smiley:
+Yep à plus tard <%username%>

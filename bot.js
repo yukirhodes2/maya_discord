@@ -1,12 +1,13 @@
 /*global require*/
 'use strict'
-var Promise = require('bluebird');
-var Discord = require('discord.io');
-var winston = require('winston');
-var auth = require('./auth.json');
-var natural = require('natural');
-var fs = Promise.promisifyAll(require('fs'));
-var readline = require('readline');
+const Promise = require('bluebird');
+const Discord = require('discord.io');
+const winston = require('winston');
+const auth = require('./auth.json');
+const natural = require('natural');
+const fs = Promise.promisifyAll(require('fs'));
+const readline = require('readline');
+const math = require('mathjs');
 
 
 var botName = 'Maya';
@@ -16,16 +17,15 @@ logger.add(winston.transports.Console, {
     name: 'console.info',
     colorize: true,
     showLevel: true,
-    level: 'silly',
+    level: 'debug',
 })
 
 var inputWorkspaceDir = './brain/inputs/fr/';
-var outputWorkspaceDir = './brain/outputs/fr/';
 var PorterStemmerFr = require('./node_modules/natural/lib/natural/stemmers/porter_stemmer_fr');
 var classifier = new natural.BayesClassifier(PorterStemmerFr);
 
-fs.readdir(inputWorkspaceDir, function(err, items) {
-    logger.info('[' + botName + '] I invoke my long-term memory (FR)');
+fs.readdirAsync(inputWorkspaceDir, function(err, items) {
+    logger.info('[' + botName + '] Invoking my long-term memory (FR)...');
     // for each input repertory, list all texts
     Promise.all(items.map(function(item) {
         var categoryName = item;
@@ -34,12 +34,13 @@ fs.readdir(inputWorkspaceDir, function(err, items) {
         return fs.readdirAsync(inputCategoryDir, function(err, contexts) {
             // for each input repertory, list all texts
             for (var j=0; j<contexts.length; j++) {
-                var contextDir = inputCategoryDir+'/'+contexts[j];
-                var inputFs = fs.createReadStream(contextDir);
+                let contextDir = inputCategoryDir+'/'+contexts[j];
+                let inputFs = fs.createReadStream(contextDir);
                 inputFs.on('error', function(err) {
                     logger.error(err);
                 })
-                var fileReader = readline.createInterface({
+                logger.debug('['+botName+'] Read stream created on "'+contextDir+'"');
+                let fileReader = readline.createInterface({
                     input: inputFs,
                     crlfDelay: Infinity
                 });
@@ -47,18 +48,23 @@ fs.readdir(inputWorkspaceDir, function(err, items) {
                     logger.silly('['+botName+'] I add "'+line+'" to "'+contextDir+'"');
                     classifier.addDocument(line, contextDir);
                 }).on('close', function() {
-                    logger.verbose('Parsed '+categoryName);
+                    logger.silly('Parsed '+contextDir);
                 });
             }
-        })
-    })).then(function(resolve){
-            logger.log('verbose', "duh");
-            resolve();
-    }).then(function() {
-        logger.info('['+botName+'] Now I\'m ready to learn !');
-        classifier.train();  
-    });
+        });
+    }));
 });
+
+var iMustReactAt = function(message, id) {
+    return (message.includes('<@'+id+'>'));
+}
+
+var userify = function(message, userId) {
+    if (message.includes('<%username%>')) {
+        return message.replace(/<%username%>/i, '<@'+userId+'>');
+    }
+    return message;
+}
 
 // Initialize Discord Bot
 var bot = new Discord.Client({
@@ -68,6 +74,7 @@ var bot = new Discord.Client({
 
 
 bot.on('ready', function () {
+    classifier.train();
     logger.info('Connected ! Logged in as :');
     logger.info(bot.username + ' - (' + bot.id + ')');
     logger.warn('['+botName+'] Please note that every server I am linked to can now interact with me. That means that I have no control of myself and my thoughts depend of the Discord\'s users. Creepy.');
@@ -75,37 +82,48 @@ bot.on('ready', function () {
 
 bot.on('message', function (user, userID, channelID, message) {
     if (userID === bot.id){
-        logger.log('info', '['+botName+'] I replied : ' + message);
-    } else {
-        logger.log('info', '['+botName+'] I received : ' + message);
+        logger.info('['+botName+'] ' + message);
     }
     
-    if (message.substring(0, 1) === '!') {
-        var args = message.substring(1).split(' ');
-        var cmd = args[0];
-       
-        args = args.splice(1);
-        switch(cmd) {
-            // !ping
-            case 'champion':
-                bot.sendMessage({
-                    to: channelID,
-                    message: 'Champion !'
-                });
-            break;
-
-            case 'labourree':
-                bot.sendMessage({
-                    to: channelID,
-                    message: 'Oui Monsieur !'
-                });
-            break;
-
-            default:
-                bot.sendMessage({
-                    to: channelID,
-                    message: "J\'ai l\'impression que tu essayes de me dire quelque chose, mais je ne comprends pas. :)"
-                });
-         }
+    if (iMustReactAt(message, bot.id)) {
+        var sentence = message.trim().toLowerCase().split('<@'+bot.id+'>').join('');
+        logger.info('['+user+' from '+channelID+'] ' + sentence);
+        
+        var currentClassification = classifier.classify(sentence).replace(/input/i, 'output');
+        
+        logger.info('Intents found : ');
+        console.log(classifier.getClassifications(sentence));
+        logger.verbose('['+botName+'] I will get an answer here : ' + currentClassification);
+        var outputFs = fs.createReadStream(currentClassification);
+        var responsesArray = [];
+        
+        outputFs.on('error', function(err) {
+            logger.error(err);
+        })
+        var fileReader = readline.createInterface({
+            input: outputFs,
+            crlfDelay: Infinity
+        });
+        fileReader.on('line', function(line) {
+            // add response to array
+            responsesArray.push(line);
+        }).on('close', function() {
+            logger.debug("ResponsesArray:", responsesArray);
+            
+            var selectedIndex = math.floor(math.random(responsesArray.length));
+            var selectedResponse = responsesArray[selectedIndex];
+            
+            logger.debug("selectedIndex:", selectedIndex);
+            logger.debug("selectedResponse:", selectedResponse);
+            
+            var output = userify(selectedResponse, userID);
+            
+            logger.debug("output:", output);
+            
+            bot.sendMessage({
+                to: channelID,
+                message: output,
+            });
+        });
      }
 });
