@@ -21,6 +21,7 @@ logger.add(winston.transports.Console, {
 })
 
 var inputWorkspaceDir = './brain/inputs/fr/';
+var chillFileDir = './brain/specials/chilltext.txt';
 var PorterStemmerFr = require('./node_modules/natural/lib/natural/stemmers/porter_stemmer_fr');
 var classifier = new natural.BayesClassifier(PorterStemmerFr);
 
@@ -55,6 +56,23 @@ fs.readdirAsync(inputWorkspaceDir, function(err, items) {
     }));
 });
 
+var chillOutputFs = fs.createReadStream(chillFileDir);
+var chillResponsesArray = [];
+
+chillOutputFs.on('error', function(err) {
+    logger.error(err);
+})
+var chillFileReader = readline.createInterface({
+    input: chillOutputFs,
+    crlfDelay: Infinity
+});
+chillFileReader.on('line', function(line) {
+    // add response to array
+    chillResponsesArray.push(line);
+}).on('close', function() {
+    logger.verbose("Réponses passives : " + chillResponsesArray);
+});
+
 var iMustReactAt = function(message, id) {
     return (message.includes('<@'+id+'>'));
 }
@@ -66,6 +84,13 @@ var userify = function(message, userId) {
     return message;
 }
 
+var faith = function(percentage) {
+    var ok = false;
+    var truePercentage = math.min(percentage, 100);
+    var target = math.random(100);
+    return target < truePercentage;
+}
+
 // Initialize Discord Bot
 var bot = new Discord.Client({
    token: auth.token,
@@ -73,7 +98,13 @@ var bot = new Discord.Client({
 });
 
 
+
 bot.on('ready', function () {
+    bot.setPresence({
+        game : {
+            name : "Integ2018"
+        }
+    });
     classifier.train();
     logger.info('Connected ! Logged in as :');
     logger.info(bot.username + ' - (' + bot.id + ')');
@@ -125,5 +156,25 @@ bot.on('message', function (user, userID, channelID, message) {
                 message: output,
             });
         });
+     } else {
+        // a reponse can either be send randomly
+        var passiveReaction = faith(5);
+        if (passiveReaction) {
+            logger.debug("Passive reaction triggered !");
+            var selectedIndex = math.floor(math.random(chillResponsesArray.length));
+            var selectedResponse = chillResponsesArray[selectedIndex];
+
+            logger.debug("selectedIndex:", selectedIndex);
+            logger.debug("selectedResponse:", selectedResponse);
+
+            var output = userify(selectedResponse, userID);
+
+            logger.debug("output:", output);
+
+            bot.sendMessage({
+                to: channelID,
+                message: output,
+            });
+        }
      }
 });
