@@ -22,6 +22,7 @@ logger.add(winston.transports.Console, {
 
 var inputWorkspaceDir = './brain/inputs/fr/';
 var chillFileDir = './brain/specials/chilltext.txt';
+var emptyFileDir = './brain/specials/empty.txt';
 var PorterStemmerFr = require('./node_modules/natural/lib/natural/stemmers/porter_stemmer_fr');
 var classifier = new natural.BayesClassifier(PorterStemmerFr);
 
@@ -70,7 +71,24 @@ chillFileReader.on('line', function(line) {
     // add response to array
     chillResponsesArray.push(line);
 }).on('close', function() {
-    logger.verbose("Réponses passives : " + chillResponsesArray);
+    logger.debug("Passive answers loaded.");
+});
+
+var emptyOutputFs = fs.createReadStream(emptyFileDir);
+var emptyResponsesArray = [];
+
+emptyOutputFs.on('error', function(err) {
+    logger.error(err);
+})
+var emptyFileReader = readline.createInterface({
+    input: emptyOutputFs,
+    crlfDelay: Infinity
+});
+emptyFileReader.on('line', function(line) {
+    // add response to array
+    emptyResponsesArray.push(line);
+}).on('close', function() {
+    logger.debug("Empty answers loaded.");
 });
 
 var iMustReactAt = function(message, id) {
@@ -114,11 +132,31 @@ bot.on('ready', function () {
 bot.on('message', function (user, userID, channelID, message) {
     if (userID === bot.id){
         logger.info('['+botName+'] ' + message);
+        return;
     }
     
     if (iMustReactAt(message, bot.id)) {
         var sentence = message.trim().toLowerCase().split('<@'+bot.id+'>').join('');
         logger.info('['+user+' from '+channelID+'] ' + sentence);
+        
+        // input empty
+        if (!sentence) {
+            var selectedIndex = math.floor(math.random(emptyResponsesArray.length));
+            var selectedResponse = emptyResponsesArray[selectedIndex];
+
+            logger.debug("selectedIndex:", selectedIndex);
+            logger.debug("selectedResponse:", selectedResponse);
+
+            var output = userify(selectedResponse, userID);
+
+            logger.debug("output:", output);
+
+            bot.sendMessage({
+                to: channelID,
+                message: output,
+            });
+            return;
+        }
         
         var currentClassification = classifier.classify(sentence).replace(/input/i, 'output');
         
@@ -139,8 +177,6 @@ bot.on('message', function (user, userID, channelID, message) {
             // add response to array
             responsesArray.push(line);
         }).on('close', function() {
-            logger.debug("ResponsesArray:", responsesArray);
-            
             var selectedIndex = math.floor(math.random(responsesArray.length));
             var selectedResponse = responsesArray[selectedIndex];
             
@@ -167,7 +203,7 @@ bot.on('message', function (user, userID, channelID, message) {
             logger.debug("selectedIndex:", selectedIndex);
             logger.debug("selectedResponse:", selectedResponse);
 
-            var output = userify(selectedResponse, userID);
+            var output = "*"+userify(selectedResponse, userID)+"*";
 
             logger.debug("output:", output);
 
