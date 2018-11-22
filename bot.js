@@ -194,7 +194,7 @@ bot.on('message', function (user, userID, channelID, message) {
         });
      } else {
         // a reponse can either be send randomly
-        var passiveReaction = faith(5);
+        var passiveReaction = faith(3);
         if (passiveReaction) {
             logger.debug("Passive reaction triggered !");
             var selectedIndex = math.floor(math.random(chillResponsesArray.length));
